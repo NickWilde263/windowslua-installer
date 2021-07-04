@@ -13,7 +13,8 @@
 #include "zip.h"
 #include "regex.h"
 
-#define LUA_VERSION "5.4.2 32-bit"
+#define LUA_VERSION "5.4.2"
+#define LUA_ARCH    "32-bit"
 
 //This is Lua 5.4 installer
 const char* defaultLuaInstallFolder = "C:\\Program Files\\Lua";
@@ -42,7 +43,7 @@ int actualMain() {
     AllocConsole();
   }
   
-  Logger_Info(__FILENAME__, "This installer for Lua " LUA_VERSION);
+  Logger_Info(__FILENAME__, "This installer for Lua " LUA_VERSION " " LUA_ARCH);
   {
     char* message;
     asprintf(&message, "Archive size %d bytes", data_lua_5_4_2_win32_bin_zip_length);
@@ -53,7 +54,7 @@ int actualMain() {
   {
     int response = MessageBox(GetConsoleWindow(), "Setup will guide you through Lua " LUA_VERSION " installation process (click ok to continue).\r\n"
                                                   "Keep the console open setup ask question in the console.\r\n"
-                                                  "If setup crash try set compatibility mode to Windows XP", "Setup", MB_OKCANCEL);
+                                                  "If setup crash, doing weird thing or fail try set compatibility mode to Windows XP", "Setup", MB_OKCANCEL);
     
     if (response == IDCANCEL) {
       Logger_Info(__FILENAME__, "User cancelled the setup");
@@ -63,22 +64,38 @@ int actualMain() {
   
   {
     Logger_Info(__FILENAME__, "Windows probably will prompt about UAC");
-    if (CreateDirectory(defaultLuaInstallFolder, NULL) == 0 && GetLastError() == ERROR_PATH_NOT_FOUND) {
-      char* message;
-      asprintf(&message, "Cannot create %s directory", defaultLuaInstallFolder);
-      Logger_Info(__FILENAME__, message);
-      free(message);
-      return 1;
+    if (CreateDirectory(defaultLuaInstallFolder, NULL) == 0) {
+      int err = GetLastError();
+      if (err != ERROR_ALREADY_EXISTS) {
+        char* message;
+        asprintf(&message, "Cannot create %s directory reason: 0x%08X", defaultLuaInstallFolder, err);
+        Logger_Info(__FILENAME__, message);
+        free(message);
+        return 1;
+      } else {
+        char* message;
+        asprintf(&message, "Directory %s exists skipping", defaultLuaInstallFolder);
+        Logger_Info(__FILENAME__, message);
+        free(message);
+      }
     }
     
-    if (CreateDirectory(lua54_Install_Folder, NULL) == 0 && GetLastError() == ERROR_ALREADY_EXISTS) {
-      Logger_Warn(__FILENAME__, "Existing Lua5.4 folder installed!");
-      int response = MessageBox(GetConsoleWindow(), "Warning: exiting Lua " LUA_VERSION " installation already exist. Do you want overwrite it?", "Setup", MB_YESNO | MB_ICONWARNING | MB_SYSTEMMODAL);
-      if (response == IDNO) {
-        Logger_Info(__FILENAME__, "User cancelled the setup (User dont want overwrite existing lua " LUA_VERSION " installation!)");
+    if (CreateDirectory(lua54_Install_Folder, NULL) == 0) {
+      int err = GetLastError();
+      
+      if (err == ERROR_ALREADY_EXISTS) {
+        Logger_Warn(__FILENAME__, "Existing Lua" LUA_VERSION " folder installed!");
+        int response = MessageBox(GetConsoleWindow(), "Warning: exiting Lua " LUA_VERSION " installation already exist. Do you want overwrite it?", "Setup", MB_YESNO | MB_ICONWARNING | MB_SYSTEMMODAL);
+        if (response == IDNO) {
+          Logger_Info(__FILENAME__, "User cancelled the setup (User dont want overwrite existing lua " LUA_VERSION " installation!)");
+          return 1;
+        }
+        Logger_Warn(__FILENAME__, "Overwritting existing Lua " LUA_VERSION " install directory!");
+      } else if (err == ERROR_ACCESS_DENIED) {
+        Logger_Error(__FILENAME__, "Access denied when creating Lua " LUA_VERSION " installation folder");
+        MessageBox(GetConsoleWindow(), "Please rerun this as administrator!", "Setup", MB_OK);
         return 1;
       }
-      Logger_Warn(__FILENAME__, "Overwritting existing Lua " LUA_VERSION " install directory!");
     }
     
     re_t regex = re_compile("^[A-Z]:");
@@ -269,6 +286,10 @@ int actualMain() {
       Logger_Error(__FILENAME__, "Cannot run helper script!");
       Logger_Error(__FILENAME__, msg);
       free(msg);
+      
+      MessageBox(GetConsoleWindow(), "Please rerun this as administrator!", "Setup", MB_OK);
+      
+      return 1;
     }
     
     free(command);
@@ -284,7 +305,7 @@ int actualMain() {
                           "Zip: https://github.com/kuba--/zip/ (Author: kuba--)\r\n"
                           "Regex: https://github.com/kokke/tiny-regex-c (Author: kokke)\r\n"
                           "\r\n"
-                          "Please relogin for installation to take affect\r\n"
+                          "Please reboot for installation to take affect\r\n"
                           "Enjoy your Lua " LUA_VERSION " installation!";
     Logger_Info(__FILENAME__, message);
     MessageBox(GetConsoleWindow(), message, "About", MB_OK | MB_ICONINFORMATION);
